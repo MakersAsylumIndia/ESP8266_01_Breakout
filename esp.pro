@@ -1,4 +1,4 @@
-update=Mon Jul 20 16:13:04 2015
+update=Mon Jul 20 17:23:24 2015
 version=1
 last_client=kicad
 [pcbnew]
@@ -26,18 +26,18 @@ LibDir=
 [eeschema/libraries]
 LibName1=esp
 LibName2=power
+[cvpcb]
+version=1
+NetIExt=net
+[general]
+version=1
 [schematic_editor]
 version=1
 PageLayoutDescrFile=
-PlotDirectoryName=/home/anool/Desktop/esp/pdf/
+PlotDirectoryName=/home/anool/projects-git/ESP8266_01_Breakout/pdf/
 SubpartIdSeparator=0
 SubpartFirstId=65
 NetFmtName=
 SpiceForceRefPrefix=0
 SpiceUseNetNumbers=0
 LabSize=60
-[cvpcb]
-version=1
-NetIExt=net
-[general]
-version=1
