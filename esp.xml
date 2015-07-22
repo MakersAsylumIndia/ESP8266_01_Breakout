@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <export version="D">
   <design>
-    <source>/home/anool/Desktop/esp/esp.sch</source>
-    <date>Mon Jul 20 16:59:03 2015</date>
-    <tool>Eeschema (2015-07-01 BZR 5850)-product</tool>
+    <source>/Users/samatamahidharia/projects-git/ESP8266_01_Breakout/esp.sch</source>
+    <date>2015 July 22, Wednesday 22:16:57</date>
+    <tool>Eeschema (2015-03-25 BZR 5536)-product</tool>
     <sheet number="1" name="/" tstamps="/">
       <title_block>
         <title>ESP8266</title>
@@ -110,7 +110,7 @@
       <tstamp>55AA09A5</tstamp>
     </comp>
     <comp ref="SW2">
-      <value>GIPO0</value>
+      <value>GPIO0</value>
       <footprint>esp:SW_PUSH_SMALL</footprint>
       <libsource lib="esp" part="SW_PUSH"/>
       <sheetpath names="/" tstamps="/"/>
@@ -146,6 +146,126 @@
     </comp>
   </components>
   <libparts>
+    <libpart lib="esp" part="SW_PUSH">
+      <fields>
+        <field name="Reference">SW</field>
+        <field name="Value">SW_PUSH</field>
+      </fields>
+      <pins>
+        <pin num="1" name="1" type="passive"/>
+        <pin num="2" name="2" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="esp" part="R">
+      <footprints>
+        <fp>R_*</fp>
+        <fp>Resistor_*</fp>
+      </footprints>
+      <fields>
+        <field name="Reference">R</field>
+        <field name="Value">R</field>
+      </fields>
+      <pins>
+        <pin num="1" name="~" type="passive"/>
+        <pin num="2" name="~" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="esp" part="LED">
+      <footprints>
+        <fp>LED-3MM</fp>
+        <fp>LED-5MM</fp>
+        <fp>LED-10MM</fp>
+        <fp>LED-0603</fp>
+        <fp>LED-0805</fp>
+        <fp>LED-1206</fp>
+        <fp>LEDV</fp>
+      </footprints>
+      <fields>
+        <field name="Reference">D</field>
+        <field name="Value">LED</field>
+      </fields>
+      <pins>
+        <pin num="1" name="K" type="passive"/>
+        <pin num="2" name="A" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="esp" part="CP">
+      <footprints>
+        <fp>CP*</fp>
+        <fp>Elko*</fp>
+        <fp>TantalC*</fp>
+        <fp>C*elec</fp>
+        <fp>c_elec*</fp>
+        <fp>SMD*_Pol</fp>
+      </footprints>
+      <fields>
+        <field name="Reference">C</field>
+        <field name="Value">CP</field>
+      </fields>
+      <pins>
+        <pin num="1" name="~" type="passive"/>
+        <pin num="2" name="~" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="esp" part="CONN_02X04">
+      <footprints>
+        <fp>Pin_Header_Straight_2X04</fp>
+        <fp>Pin_Header_Angled_2X04</fp>
+        <fp>Socket_Strip_Straight_2X04</fp>
+        <fp>Socket_Strip_Angled_2X04</fp>
+      </footprints>
+      <fields>
+        <field name="Reference">P</field>
+        <field name="Value">CONN_02X04</field>
+      </fields>
+      <pins>
+        <pin num="1" name="P1" type="passive"/>
+        <pin num="2" name="P2" type="passive"/>
+        <pin num="3" name="P3" type="passive"/>
+        <pin num="4" name="P4" type="passive"/>
+        <pin num="5" name="P5" type="passive"/>
+        <pin num="6" name="P6" type="passive"/>
+        <pin num="7" name="P7" type="passive"/>
+        <pin num="8" name="P8" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="esp" part="CONN_01X06">
+      <footprints>
+        <fp>Pin_Header_Straight_1X06</fp>
+        <fp>Pin_Header_Angled_1X06</fp>
+        <fp>Socket_Strip_Straight_1X06</fp>
+        <fp>Socket_Strip_Angled_1X06</fp>
+      </footprints>
+      <fields>
+        <field name="Reference">P</field>
+        <field name="Value">CONN_01X06</field>
+      </fields>
+      <pins>
+        <pin num="1" name="P1" type="passive"/>
+        <pin num="2" name="P2" type="passive"/>
+        <pin num="3" name="P3" type="passive"/>
+        <pin num="4" name="P4" type="passive"/>
+        <pin num="5" name="P5" type="passive"/>
+        <pin num="6" name="P6" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="esp" part="CONN_01X03">
+      <footprints>
+        <fp>Pin_Header_Straight_1X03</fp>
+        <fp>Pin_Header_Angled_1X03</fp>
+        <fp>Socket_Strip_Straight_1X03</fp>
+        <fp>Socket_Strip_Angled_1X03</fp>
+      </footprints>
+      <fields>
+        <field name="Reference">P</field>
+        <field name="Value">CONN_01X03</field>
+      </fields>
+      <pins>
+        <pin num="1" name="P1" type="passive"/>
+        <pin num="2" name="P2" type="passive"/>
+        <pin num="3" name="P3" type="passive"/>
+      </pins>
+    </libpart>
     <libpart lib="esp" part="AP1117">
       <aliases>
         <alias>AP1117D15</alias>
@@ -191,160 +311,40 @@
         <pin num="3" name="VI" type="power_in"/>
       </pins>
     </libpart>
-    <libpart lib="esp" part="CONN_01X03">
-      <footprints>
-        <fp>Pin_Header_Straight_1X03</fp>
-        <fp>Pin_Header_Angled_1X03</fp>
-        <fp>Socket_Strip_Straight_1X03</fp>
-        <fp>Socket_Strip_Angled_1X03</fp>
-      </footprints>
-      <fields>
-        <field name="Reference">P</field>
-        <field name="Value">CONN_01X03</field>
-      </fields>
-      <pins>
-        <pin num="1" name="P1" type="passive"/>
-        <pin num="2" name="P2" type="passive"/>
-        <pin num="3" name="P3" type="passive"/>
-      </pins>
-    </libpart>
-    <libpart lib="esp" part="CONN_01X06">
-      <footprints>
-        <fp>Pin_Header_Straight_1X06</fp>
-        <fp>Pin_Header_Angled_1X06</fp>
-        <fp>Socket_Strip_Straight_1X06</fp>
-        <fp>Socket_Strip_Angled_1X06</fp>
-      </footprints>
-      <fields>
-        <field name="Reference">P</field>
-        <field name="Value">CONN_01X06</field>
-      </fields>
-      <pins>
-        <pin num="1" name="P1" type="passive"/>
-        <pin num="2" name="P2" type="passive"/>
-        <pin num="3" name="P3" type="passive"/>
-        <pin num="4" name="P4" type="passive"/>
-        <pin num="5" name="P5" type="passive"/>
-        <pin num="6" name="P6" type="passive"/>
-      </pins>
-    </libpart>
-    <libpart lib="esp" part="CONN_02X04">
-      <footprints>
-        <fp>Pin_Header_Straight_2X04</fp>
-        <fp>Pin_Header_Angled_2X04</fp>
-        <fp>Socket_Strip_Straight_2X04</fp>
-        <fp>Socket_Strip_Angled_2X04</fp>
-      </footprints>
-      <fields>
-        <field name="Reference">P</field>
-        <field name="Value">CONN_02X04</field>
-      </fields>
-      <pins>
-        <pin num="1" name="P1" type="passive"/>
-        <pin num="2" name="P2" type="passive"/>
-        <pin num="3" name="P3" type="passive"/>
-        <pin num="4" name="P4" type="passive"/>
-        <pin num="5" name="P5" type="passive"/>
-        <pin num="6" name="P6" type="passive"/>
-        <pin num="7" name="P7" type="passive"/>
-        <pin num="8" name="P8" type="passive"/>
-      </pins>
-    </libpart>
-    <libpart lib="esp" part="CP">
-      <footprints>
-        <fp>CP*</fp>
-        <fp>Elko*</fp>
-        <fp>TantalC*</fp>
-        <fp>C*elec</fp>
-        <fp>c_elec*</fp>
-        <fp>SMD*_Pol</fp>
-      </footprints>
-      <fields>
-        <field name="Reference">C</field>
-        <field name="Value">CP</field>
-      </fields>
-      <pins>
-        <pin num="1" name="~" type="passive"/>
-        <pin num="2" name="~" type="passive"/>
-      </pins>
-    </libpart>
-    <libpart lib="esp" part="LED">
-      <footprints>
-        <fp>LED-3MM</fp>
-        <fp>LED-5MM</fp>
-        <fp>LED-10MM</fp>
-        <fp>LED-0603</fp>
-        <fp>LED-0805</fp>
-        <fp>LED-1206</fp>
-        <fp>LEDV</fp>
-      </footprints>
-      <fields>
-        <field name="Reference">D</field>
-        <field name="Value">LED</field>
-      </fields>
-      <pins>
-        <pin num="1" name="K" type="passive"/>
-        <pin num="2" name="A" type="passive"/>
-      </pins>
-    </libpart>
-    <libpart lib="esp" part="R">
-      <footprints>
-        <fp>R_*</fp>
-        <fp>Resistor_*</fp>
-      </footprints>
-      <fields>
-        <field name="Reference">R</field>
-        <field name="Value">R</field>
-      </fields>
-      <pins>
-        <pin num="1" name="~" type="passive"/>
-        <pin num="2" name="~" type="passive"/>
-      </pins>
-    </libpart>
-    <libpart lib="esp" part="SW_PUSH">
-      <fields>
-        <field name="Reference">SW</field>
-        <field name="Value">SW_PUSH</field>
-      </fields>
-      <pins>
-        <pin num="1" name="1" type="passive"/>
-        <pin num="2" name="2" type="passive"/>
-      </pins>
-    </libpart>
   </libparts>
   <libraries>
     <library logical="esp">
-      <uri>/home/anool/Desktop/esp/esp.lib</uri>
+      <uri>/Users/samatamahidharia/projects-git/ESP8266_01_Breakout/esp.lib</uri>
     </library>
   </libraries>
   <nets>
     <net code="1" name="/RX-PC">
-      <node ref="P3" pin="1"/>
       <node ref="P2" pin="2"/>
+      <node ref="P3" pin="1"/>
     </net>
-    <net code="2" name="/VREG/3V3">
-      <node ref="C2" pin="1"/>
-      <node ref="U1" pin="2"/>
+    <net code="2" name="/VREG/5V0">
+      <node ref="U1" pin="3"/>
+      <node ref="P1" pin="1"/>
+      <node ref="C1" pin="1"/>
+    </net>
+    <net code="3" name="/VREG/3V3">
       <node ref="R5" pin="1"/>
       <node ref="P1" pin="3"/>
-      <node ref="P3" pin="7"/>
-      <node ref="R2" pin="1"/>
-      <node ref="R3" pin="1"/>
       <node ref="R4" pin="1"/>
-    </net>
-    <net code="3" name="/VREG/5V0">
-      <node ref="C1" pin="1"/>
-      <node ref="P1" pin="1"/>
-      <node ref="U1" pin="3"/>
+      <node ref="R3" pin="1"/>
+      <node ref="R2" pin="1"/>
+      <node ref="P3" pin="7"/>
+      <node ref="C2" pin="1"/>
+      <node ref="U1" pin="2"/>
     </net>
     <net code="4" name="/GPIO2">
       <node ref="R4" pin="2"/>
       <node ref="P3" pin="4"/>
     </net>
     <net code="5" name="/GPIO0">
-      <node ref="SW2" pin="1"/>
       <node ref="P3" pin="6"/>
       <node ref="D1" pin="1"/>
+      <node ref="SW2" pin="1"/>
     </net>
     <net code="6" name="/RST">
       <node ref="P3" pin="5"/>
@@ -356,8 +356,8 @@
       <node ref="P3" pin="3"/>
     </net>
     <net code="8" name="Net-(D1-Pad2)">
-      <node ref="R5" pin="2"/>
       <node ref="D1" pin="2"/>
+      <node ref="R5" pin="2"/>
     </net>
     <net code="9" name="/TX-PC">
       <node ref="P2" pin="3"/>
@@ -369,8 +369,8 @@
       <node ref="P3" pin="8"/>
     </net>
     <net code="11" name="/TX-PC-DIV">
-      <node ref="P4" pin="3"/>
       <node ref="R1" pin="2"/>
+      <node ref="P4" pin="3"/>
       <node ref="R6" pin="1"/>
     </net>
     <net code="12" name="Net-(P1-Pad2)">
@@ -384,14 +384,14 @@
       <node ref="P2" pin="1"/>
     </net>
     <net code="15" name="/VREG/GND">
+      <node ref="U1" pin="1"/>
       <node ref="C1" pin="2"/>
       <node ref="C2" pin="2"/>
-      <node ref="U1" pin="1"/>
-      <node ref="R6" pin="2"/>
-      <node ref="P3" pin="2"/>
       <node ref="P2" pin="6"/>
       <node ref="SW1" pin="2"/>
       <node ref="SW2" pin="2"/>
+      <node ref="P3" pin="2"/>
+      <node ref="R6" pin="2"/>
     </net>
   </nets>
 </export>
