@@ -1,4 +1,4 @@
-update=Mon Jul 20 17:23:24 2015
+update=2015 July 22, Wednesday 20:19:44
 version=1
 last_client=kicad
 [pcbnew]
@@ -29,8 +29,6 @@ LibName2=power
 [cvpcb]
 version=1
 NetIExt=net
-[general]
-version=1
 [schematic_editor]
 version=1
 PageLayoutDescrFile=
@@ -41,3 +39,5 @@ NetFmtName=
 SpiceForceRefPrefix=0
 SpiceUseNetNumbers=0
 LabSize=60
+[general]
+version=1
