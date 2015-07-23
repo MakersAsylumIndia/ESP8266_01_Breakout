@@ -1,0 +1,1374 @@
+!/usr/bin/env python
+#
+# This file is part of Tin's Kicad Tools.
+# Copyright (c) 2012, Martin Furter
+# All rights reserved.
+# 
+# ANY-LICENSE:
+# You can use this software under any license approved by the
+# Open Source Initiative as long as the license you choose is
+# compatible to the dependencies of Tin's Kicad Tools.
+# 
+# See http://www.opensource.org/licenses/ for a list of
+# approved licenses.
+# 
+#-------------------------------------------------------------------------------
+
+import re
+import sys
+import traceback
+
+__version__ = "2.3"
+__revision__ = "$Rev: 488 $".split()[1]
+
+
+def length_str_to_int_1( s ):
+	return int(s)
+def length_int_to_str_1( n ):
+	return "%d" % n
+
+def length_str_to_int_2( s ):
+	n = 1
+	if s.startswith( "-" ):
+		n = -1
+		s = s[1:]
+	if "." in s:
+		i, f = s.split( "." )
+		n *= 1000000 * int( i ) + int( f.ljust( 6, "0" ) )
+	else:
+		n *= 1000000 * int( s )
+	return n
+def length_int_to_str_2( n ):
+	s = ""
+	if n < 0:
+		s = "-"
+		n = -n
+	i = n / 1000000
+	f = n % 1000000
+	if f == 0:
+		return "%s%d" % ( s, i )
+	else:
+		return ( "%s%d.%06d" % ( s, i, f ) ).rstrip( "0" )
+
+length_str_to_int = length_str_to_int_1
+length_int_to_str = length_int_to_str_1
+length_unit = 1
+
+class Coord:
+
+	def __init__( self, x, y ):
+		if type(x) is str or type(y) is str:
+			x = length_str_to_int(x)
+			y = length_str_to_int(y)
+		if x == None or y == None:
+			raise Exception, "missing parameter for coord"
+		self.x = x
+		self.y = y
+
+	def clone( self ):
+		return Coord( self.x, self.y )
+
+	def to_str( self ):
+		return "%s %s" % (
+			length_int_to_str(self.x), length_int_to_str(self.y) )
+
+	def str_pair( self ):
+		return length_int_to_str(self.x), length_int_to_str(self.y)
+
+	def __add__( self, c ):
+		return Coord( self.x+c.x, self.y+c.y )
+
+	def __sub__( self, c ):
+		return Coord( self.x-c.x, self.y-c.y )
+
+	def rot( self, angle ):
+		if angle == 0:
+			return self
+		elif angle == 90:
+			return Coord( self.y, -self.x )
+		elif angle == 180:
+			return Coord( -self.x, -self.y )
+		elif angle == 270:
+			return Coord( -self.y, self.x )
+
+class Area:
+
+	def __init__( self, p1, p2 ):
+		self.tl = p1
+		self.br = p2
+		if self.tl.x > self.br.x:
+			x = self.tl.x
+			self.tl.x = self.br.x
+			self.br.x = x
+		if self.tl.y > self.br.y:
+			y = self.tl.y
+			self.tl.y = self.br.y
+			self.br.y = y
+
+	def inside( self, c ):
+		return c.x >= self.tl.x and c.x <= self.br.x and \
+				c.y >= self.tl.y and c.y <= self.br.y 
+
+	def left( self ):
+		return self.tl.x
+
+	def top( self ):
+		return self.tl.y
+
+	def right( self ):
+		return self.br.x
+
+	def bottom( self ):
+		return self.br.y
+
+	def width_m1( self ):
+		return self.br.x - self.tl.x
+
+	def height_m1( self ):
+		return self.br.y - self.tl.y
+
+	def get( self, which, flip=False ):
+		if not flip:
+			if which == "top-left":
+				return self.tl
+			elif which == "top-right":
+				return Coord( self.br.x, self.tl.y )
+			elif which == "bottom-left":
+				return Coord( self.tl.x, self.br.y )
+			elif which == "bottom-right":
+				return self.br
+		else:
+			if which == "top-left":
+				return Coord( self.br.x, self.tl.y )
+			elif which == "top-right":
+				return self.tl
+			elif which == "bottom-left":
+				return self.br
+			elif which == "bottom-right":
+				return Coord( self.tl.x, self.br.y )
+
+
+class BaseTransform:
+
+	def __init__( self ):
+		self.flip = False
+
+	def str_coord( self, x, y ):
+		c = Coord( x, y )
+		c = self.coord( c )
+		return c.str_pair()
+
+	def str_relcoord( self, x, y ):
+		c = Coord( x, y )
+		c = self.relcoord( c )
+		return c.str_pair()
+
+	def str_rot( self, angle ):
+		return "%d" % self.rot( int(angle) )
+
+
+class NullTransform( BaseTransform ):
+
+	def __init__( self ):
+		pass
+
+	def coord( self, c ):
+		return c
+
+	def rot( self, angle ):
+		return angle
+
+	def name( self, name ):
+		return name
+
+	def net( self, nr, name ):
+		return nr, name
+
+	def layer( self, layer ):
+		return layer
+
+
+nulltransform = NullTransform()
+
+
+class RotateTransform( BaseTransform ):
+
+	def __init__( self, area, cornername, destination, angle, suffix, board ):
+		self.area = area
+		self.source = self.area.get( cornername )
+		self.destination = destination
+		self.angle = angle
+		self.suffix = suffix
+		self.board = board
+		self.flip = False
+
+	def coord( self, c ):
+		d = c - self.source
+		return self.destination + d.rot( self.angle )
+
+	def rot( self, angle ):
+		return (angle + 10 * self.angle) % 3600
+
+	def name( self, name ):
+		return name + self.suffix
+
+	def net( self, nr, name ):
+		if self.suffix != "" and nr != 0:
+			if name == None:
+				if self.board.source_board != None:
+					name = self.board.source_board.net_by_nr[nr].name
+				else:
+					name = self.board.net_by_nr[nr].name
+			newname = name + self.suffix
+			newnr = self.board.clone_net( nr, name, newname )
+			return newnr, newname
+		return nr, name
+
+	def layer( self, layer ):
+		return layer
+
+
+class FlipRotateTransform( BaseTransform ):
+
+	def __init__( self, area, cornername, destination, angle, flip, suffix, board ):
+		self.area = area
+		self.source = self.area.get( cornername, flip )
+		self.destination = destination
+		self.angle = angle
+		self.flip = flip
+		self.suffix = suffix
+		self.board = board
+		self.flipx = 0
+		if self.flip:
+			if self.area.left() == self.source.x:
+				self.flipx = self.area.width_m1()
+			else:
+				self.flipx = -self.area.width_m1()
+
+	def coord( self, c ):
+		d = c - self.source
+		if self.flip:
+			d.x = self.flipx - d.x
+		d = self.destination + d.rot( self.angle )
+		return d
+
+	def relcoord( self, c ):
+		d = c.clone()
+		if self.flip:
+			d.x = -d.x
+		#return d.rot( self.angle )
+		return d
+
+	def rot( self, angle ):
+		if self.flip:
+			angle = 3600 - angle
+		return (angle + 10 * self.angle) % 3600
+
+	def name( self, name ):
+		return name + self.suffix
+
+	def net( self, nr, name ):
+		if self.suffix != "" and nr != 0:
+			if name == None:
+				if self.board.source_board != None:
+					name = self.board.source_board.net_by_nr[nr].name
+				else:
+					name = self.board.net_by_nr[nr].name
+			newname = name + self.suffix
+			newnr = self.board.clone_net( nr, name, newname )
+			return newnr, newname
+		return nr, name
+
+	def layer( self, layer ):
+		if self.flip:
+			if layer == 15:
+				# copper: back -> front
+				return 0
+			if layer == 0:
+				# copper: front -> back
+				return 15
+			if layer < 15:
+				# inner copper: no change
+				return layer
+			if layer <= 23:
+				# 16..23: Adhes, SoldP, SilkS, Mask: front <-> back
+				return layer ^ 1
+		return layer
+
+
+class PcbException( Exception ):
+	pass
+
+
+class PcbObject:
+
+	def __init__( self ):
+		self.objs = []
+
+	def clone( self, trans=nulltransform ):
+		raise PcbException, "subclass must override clone()"
+
+	def add( self, obj ):
+		index = len(self.objs)
+		self.objs.append( obj )
+		return index
+
+	def add_line( self, line, words ):
+		"""
+		Add a line to this object.
+
+		Returns a tuple containing two boolean values. If the first one is
+		True the line has been used, if False the line should be processed
+		again. The second boolean indicates if this object is finished
+		processing lines.
+		"""
+		raise PcbException, "subclass '%s' must override add_line()" % \
+					self.__class__.__name__
+
+	def write( self, ofd ):
+		raise PcbException, "subclass '%s' must override write()" % \
+					self.__class__.__name__
+
+	def write_objs( self, ofd ):
+		for obj in self.objs:
+			obj.write( ofd )
+
+
+class PcbLineObject( PcbObject ):
+
+	def __init__( self, starttag, endtag, newline ):
+		PcbObject.__init__( self )
+		self.starttag = starttag
+		self.endtag = endtag
+		self.newline = newline
+
+	def add_line( self, line, words ):
+		if words[0] == self.endtag:
+			return ( True, True )
+		self.objs.append( line )
+		return ( True, False )
+
+	def write( self, ofd ):
+		ofd.write( self.starttag + "\n" )
+		if len(self.objs) > 0:
+			ofd.write( "\n".join( self.objs ) )
+			ofd.write( "\n" + self.endtag + "\n" )
+		else:
+			ofd.write( self.endtag + "\n" )
+		if self.newline:
+			ofd.write( "\n" )
+
+
+class PcbListObject( PcbObject ):
+
+	def __init__( self, constructor, starttag, line, words ):
+		PcbObject.__init__( self )
+		self.constructor = constructor
+		self.starttag = starttag
+		self.obj = self.constructor( line, words )
+
+	def add_line( self, line, words ):
+		if self.obj:
+			used, end = self.obj.add_line( line, words )
+			if end:
+				self.add( self.obj )
+				self.obj = None
+		elif words[0] == self.starttag:
+			self.obj = self.constructor( line, words )
+		else:
+			return ( False, True )
+		return ( True, False )
+
+	def write( self, ofd ):
+		self.write_objs( ofd )
+
+
+class General( PcbLineObject ):
+
+	def __init__( self, line, words ):
+		PcbLineObject.__init__( self, "$GENERAL", "$EndGENERAL", True )
+
+
+class Sheetdescr( PcbLineObject ):
+
+	def __init__( self, line, words ):
+		PcbLineObject.__init__( self, "$SHEETDESCR", "$EndSHEETDESCR", True )
+
+
+class Setup( PcbLineObject ):
+
+	def __init__( self, line, words ):
+		PcbLineObject.__init__( self, "$SETUP", "$EndSETUP", True )
+
+
+class Equipot( PcbObject ):
+
+	def __init__( self, line, words ):
+		PcbObject.__init__( self )
+		self.netclass = None
+
+	def clone( self, trans=nulltransform ):
+		e = Equipot( self, None, None )
+		e.nr = self.nr
+		e.name = self.name
+		e.st1 = self.st1
+		return e
+
+	def add_line( self, line, words ):
+		if words[0] == "$EndEQUIPOT":
+			return ( True, True )
+		elif words[0] == "Na":
+			self.nr = int(words[1])
+			self.name = words[2][1:-1]
+		elif words[0] == "St":
+			self.st1 = words[1]
+		else:
+			raise PcbException, "unknown Equipot line '%s'" % words[0]
+		return ( True, False )
+
+	def write( self, ofp ):
+		ofp.write( "$EQUIPOT\nNa %d \"%s\"\nSt %s\n$EndEQUIPOT\n" % (
+				self.nr, self.name, self.st1 ) )
+
+
+class Equipots( PcbListObject ):
+
+	def __init__( self, line, words ):
+		PcbListObject.__init__( self, Equipot, "$EQUIPOT", line, words )
+
+
+class Nclass( PcbObject ):
+
+	def __init__( self, line, words ):
+		PcbObject.__init__( self )
+		self.nets = []
+
+	def clone( self, trans=nulltransform ):
+		n = Nclass( None, None )
+		n.objs = self.objs[:]
+		n.nets = self.nets[:]
+		return n
+
+	def add_line( self, line, words ):
+		if words[0] == "$EndNCLASS":
+			return True, True
+		elif words[0] == "AddNet":
+			self.nets.append( words[1][1:-1] )
+		else:
+			self.objs.append( line )
+		return True, False
+
+	def write( self, ofp ):
+		ofp.write( "$NCLASS\n" )
+		for line in self.objs:
+			ofp.write( "%s\n" % line )
+		for net in self.nets:
+			ofp.write( "AddNet \"%s\"\n" % net )
+		ofp.write( "$EndNCLASS\n" )
+
+
+class Nclasses( PcbListObject ):
+
+	def __init__( self, line, words ):
+		PcbListObject.__init__( self, Nclass, "$NCLASS", line, words )
+
+
+class Module( PcbObject ):
+
+	def __init__( self, line, words ):
+		PcbObject.__init__( self )
+		self.name = words[1]
+		self.obj = None
+		self.lines = []
+
+	def clone( self, trans=nulltransform ):
+		m = Module( "", ( "", self.name ) )
+		m.position = trans.coord( self.position )
+		m.angle = trans.rot( self.angle )
+		m.layer = trans.layer( self.layer )
+		m.po5 = self.po5
+		m.po6 = self.po6
+		m.po7 = self.po7
+		for line in self.lines:
+			words = line.split()
+			changed = False
+			if words[0] == "T0":
+				words[11] = "\"%s\"" % trans.name( words[11][1:-1] )
+			if words[0] in ( "T0", "T1" ):
+				words[1], words[2] = trans.str_relcoord( words[1], words[2] )
+				words[5] = trans.str_rot( words[5] )
+				if trans.flip:
+					# mirrored / normal
+					if words[7] == "M":
+						words[7] = "N"
+					elif words[7] == "N":
+						words[7] = "M"
+				words[9] = "%d" % trans.layer( int( words[9] ) )
+			if words[0] == "DS":
+				words[1], words[2] = trans.str_relcoord( words[1], words[2] )
+				words[3], words[4] = trans.str_relcoord( words[3], words[4] )
+			m.lines.append( " ".join( words ) )
+		for obj in self.objs:
+			m.add( obj.clone( trans ) )
+		return m
+
+	def add_line( self, line, words ):
+		if words[0] == "$EndMODULE":
+			return ( True, True )
+		elif line == "$PAD":
+			self.obj = Pad( line, words )
+		elif self.obj:
+			used, end = self.obj.add_line( line, words )
+			if end:
+				self.objs.append( self.obj )
+				self.obj = None
+		elif words[0] == "Po":
+			self.position = Coord( words[1], words[2] )
+			self.angle = int(words[3])
+			self.layer = int(words[4])
+			self.po5 = words[5]
+			self.po6 = words[6]
+			self.po7 = words[7]
+		else:
+			# ++++
+			self.lines.append( line )
+		return True, False
+
+	def write( self, ofd ):
+		ofd.write( "$MODULE %s\n" % self.name )
+		ofd.write( "Po %s %d %d %s %s %s\n" % ( self.position.to_str(),
+				self.angle, self.layer, self.po5, self.po6, self.po7 ) )
+		for line in self.lines:
+			ofd.write( line + "\n" )
+		self.write_objs( ofd )
+		ofd.write( "$EndMODULE %s\n" % self.name )
+
+	def inside( self, area ):
+		return area.inside( self.position )
+
+
+class Modules( PcbListObject ):
+
+	def __init__( self, line, words ):
+		PcbListObject.__init__( self, Module, "$MODULE", line, words )
+
+
+class Pad( PcbObject ):
+
+	def __init__( self, line, words ):
+		PcbObject.__init__( self )
+		self.local = None
+
+	def clone( self, trans=nulltransform ):
+		p = Pad( None, None )
+		p.name = self.name
+		p.sh2 = self.sh2
+		p.sh3 = self.sh3
+		p.sh4 = self.sh4
+		p.sh5 = self.sh5
+		p.sh6 = self.sh6
+		p.angle = trans.rot( self.angle )
+		p.drill = self.drill
+		p.at = self.transform_at( trans, self.at )
+		p.netnr, p.netname = trans.net( self.netnr, self.netname )
+		p.po = trans.relcoord( self.po )
+		p.local = self.local
+		return p
+
+	def transform_at( self, trans, at ):
+		if trans.flip:
+			words = at.split()
+			oflags = int( words[3], 16 )
+			flag1 = (oflags >> 16) & 0x0F
+			flag2 = (oflags >> 20) & 0x0F
+			olayers = oflags & 0x0000FFFF
+			nlayers = 0
+			for i in range( 0, 16 ):
+				if ( olayers & (1 << i) ) != 0:
+					nlayers |= 1 << trans.layer( i )
+			if flag1 == 8:
+				flag1 = 4
+			elif flag1 == 4:
+				flag1 = 8
+			if flag2 == 8:
+				flag2 = 4
+			elif flag2 == 4:
+				flag2 = 8
+			elif flag2 == 0xD:
+				flag2 = 0xE
+			elif flag2 == 0xE:
+				flag2 = 0xD
+			nflags = flag2 << 20 | flag1 << 16 | nlayers
+			words[3] = "%08X" % nflags
+			at = " ".join( words )
+		return at
+
+	def add_line( self, line, words ):
+		if words[0] == "$EndPAD":
+			return ( True, True )
+		elif words[0] == "Sh":
+			self.name = words[1][1:-1]
+			self.sh2 = words[2]
+			self.sh3 = words[3]
+			self.sh4 = words[4]
+			self.sh5 = words[5]
+			self.sh6 = words[6]
+			self.angle = int(words[7])
+		elif words[0] == "Dr":
+			self.drill = line
+		elif words[0] == "At":
+			self.at = line
+		elif words[0] == "Ne":
+			self.netnr = int(words[1])
+			self.netname = words[2][1:-1]
+		elif words[0] == "Po":
+			self.po = Coord( words[1], words[2] )
+		elif words[0] == ".LocalClearance":
+			if self.local:
+				self.local += "\n" + line
+			else:
+				self.local = line
+		return ( True, False )
+
+	def write( self, ofd ):
+		ofd.write( "$PAD\n" )
+		ofd.write( "Sh \"%s\" %s %s %s %s %s %d\n" % ( self.name,
+			self.sh2, self.sh3, self.sh4, self.sh5, self.sh6, self.angle ) )
+		ofd.write( self.drill + "\n" )
+		ofd.write( self.at + "\n" )
+		ofd.write( "Ne %d \"%s\"\n" % ( self.netnr, self.netname ) )
+		ofd.write( "Po %s\n" % self.po.to_str() )
+		if self.local:
+			ofd.write( self.local + "\n" )
+		ofd.write( "$EndPAD\n" )
+
+
+class Drawsegment( PcbLineObject ):
+
+	def __init__( self, line, words ):
+		PcbLineObject.__init__( self, "$DRAWSEGMENT", "$EndDRAWSEGMENT", False )
+
+	def clone( self, trans=nulltransform ):
+		s = Drawsegment( None, None )
+		for line in self.objs:
+			words = line.split()
+			if words[0] == "Po":
+				words[2], words[3] = trans.str_coord( words[2], words[3] )
+				words[4], words[5] = trans.str_coord( words[4], words[5] )
+				line = " ".join( words )
+			elif words[0] == "De":
+				pass
+			s.objs.append( line )
+		return s
+
+	def inside( self, a ):
+		for line in self.objs:
+			if line.startswith( "Po" ):
+				break
+		words = line.split()
+		c1 = Coord( words[2], words[3] )
+		c2 = Coord( words[4], words[5] )
+		return a.inside( c1 ) and a.inside( c2 )
+
+
+class Drawsegments( PcbListObject ):
+
+	def __init__( self, line, words ):
+		PcbListObject.__init__( self, Drawsegment, "$DRAWSEGMENT", line, words )
+
+
+class Textpcb( PcbObject ):
+
+	def __init__( self, line, words ):
+		PcbObject.__init__( self )
+
+	def clone( self, trans=nulltransform ):
+		t = Textpcb( None, None )
+		t.text = self.text
+		t.position = trans.coord( self.position )
+		t.charwidth = self.charwidth
+		t.charheight = self.charheight
+		t.linewidth = self.linewidth
+		t.angle = trans.rot( self.angle )
+		t.de = self.de
+		return t
+
+	def add_line( self, line, words ):
+		if words[0] == "$EndTEXTPCB":
+			return True, True
+		elif words[0] == "Te":
+			self.text = line.split( "\"" )[1]
+		elif words[0] == "nl":
+			self.text += "\n" + line.split( "\"" )[1]
+		elif words[0] == "Po":
+			self.position = Coord( words[1], words[2] )
+			self.charwidth = length_str_to_int(words[3])
+			self.charheight = length_str_to_int(words[4])
+			self.linewidth = length_str_to_int(words[5])
+			self.angle = int(words[6])
+		elif words[0] == "De":
+			self.de = line
+		return True, False
+
+	def write( self, ofd ):
+		ofd.write( "$TEXTPCB\n" )
+		ofd.write( "Te \"%s\"\n" % self.text.replace( "\n", "\"\nnl \"" ) )
+		ofd.write( "Po %s %s %s %s %d\n" % ( self.position.to_str(),
+				length_int_to_str(self.charwidth), length_int_to_str(self.charheight), length_int_to_str(self.linewidth), self.angle ) )
+		ofd.write( self.de + "\n" )
+		ofd.write( "$EndTEXTPCB\n" )
+
+	def inside( self, area ):
+		return area.inside( self.position )
+
+
+class Textpcbs( PcbListObject ):
+
+	def __init__( self, line, words ):
+		PcbListObject.__init__( self, Textpcb, "$TEXTPCB", line, words )
+
+
+class Cotation( PcbLineObject ):
+
+	def __init__( self, line, words ):
+		PcbLineObject.__init__( self, "$COTATION", "$endCOTATION", False )
+
+
+class Cotations( PcbListObject ):
+
+	def __init__( self, line, words ):
+		PcbListObject.__init__( self, Cotation, "$COTATION", line, words )
+
+
+class Track( PcbObject ):
+
+	def __init__( self, line, words ):
+		PcbObject.__init__( self )
+		if words != None:
+			self.po1 = int(words[1])
+			self.coord1 = Coord( words[2], words[3] )
+			self.coord2 = Coord( words[4], words[5] )
+			self.width = length_str_to_int(words[6])
+			self.po7 = int(words[7])
+
+	def clone( self, trans=nulltransform ):
+		t = Track( None, None )
+		t.po1 = self.po1
+		t.coord1 = trans.coord( self.coord1 )
+		t.coord2 = trans.coord( self.coord2 )
+		t.width = self.width
+		t.po7 = self.po7
+		t.layer = trans.layer( self.layer )
+		t.de2 = self.de2
+		t.de3 = "%d" % trans.net( int(self.de3), None )[0]
+		t.de4 = self.de4
+		t.de5 = self.de5
+		return t
+
+	def add_line( self, line, words ):
+		if words[0] != "De":
+			print "unrecognized line in Track:\n    %s" % line
+			raise PcbException, "unrecognized line in Track: %s" % line
+		self.layer = int(words[1])
+		self.de2 = words[2]
+		self.de3 = words[3]
+		self.de4 = words[4]
+		self.de5 = words[5]
+		return True, True
+
+	def write( self, ofd ):
+		ofd.write( "Po %d %s %s %s %d\n" % ( self.po1,
+				self.coord1.to_str(), self.coord2.to_str(),
+				length_int_to_str(self.width), self.po7 ) )
+		ofd.write( "De %d %s %s %s %s\n" % ( self.layer,
+				self.de2, self.de3, self.de4, self.de5 ) )
+
+	def inside( self, area ):
+		return area.inside( self.coord1 ) and area.inside( self.coord2 )
+
+
+class Tracks( PcbObject ):
+
+	def __init__( self, line, words ):
+		PcbObject.__init__( self )
+
+	def add_line( self, line, words ):
+		if words[0] == "$EndTRACK":
+			return ( True, True )
+		elif words[0] == "Po":
+			self.add( Track( line, words ) )
+		else:
+			self.objs[-1].add_line( line, words )
+		return True, False
+
+	def write( self, ofd ):
+		ofd.write( "$TRACK\n" )
+		self.write_objs( ofd )
+		ofd.write( "$EndTRACK\n" )
+
+
+class Zone( PcbLineObject ):
+
+	def __init__( self, line, words ):
+		PcbLineObject.__init__( self, "$ZONE", "$EndZONE", False )
+
+
+class CzoneOutline( PcbObject ):
+
+	def __init__( self, line, words ):
+		PcbObject.__init__( self )
+		self.lines = []
+		self.in_polyscorners = False
+		self.polyscorners = []
+
+	def clone( self, trans=nulltransform ):
+		o = CzoneOutline( None, None )
+		o.zinfo1 = self.zinfo1
+		o.zlayer = trans.layer( self.zlayer )
+		o.netnr, o.netname = trans.net( self.netnr, self.netname )
+		o.lines = self.lines[:]
+		for c, a in self.objs:
+			o.add( ( trans.coord( c ), a ) )
+		for c, a, b in self.polyscorners:
+			o.polyscorners.append( ( trans.coord( c ), a, b ) )
+		return o
+
+	def add_line( self, line, words ):
+		if words[0] == "$endCZONE_OUTLINE":
+			return True, True
+		elif words[0] == "$POLYSCORNERS":
+			self.in_polyscorners = True
+		elif words[0] == "$endPOLYSCORNERS":
+			self.in_polyscorners = False
+		elif self.in_polyscorners:
+			self.polyscorners.append( ( Coord( words[0], words[1] ),
+					int(words[2]), int(words[3]) ) )
+		elif words[0] == "ZCorner":
+			self.add( ( Coord( words[1], words[2] ), int(words[3]) ) )
+		elif words[0] == "ZInfo":
+			self.zinfo1 = words[1]
+			self.netnr = int(words[2])
+			self.netname = words[3][1:-1]
+		elif words[0] == "ZLayer":
+			self.zlayer = int(words[1])
+		else:
+			self.lines.append( line )
+		return True, False
+
+	def write( self, ofd ):
+		ofd.write( "$CZONE_OUTLINE\n" )
+		ofd.write( "ZInfo %s %d \"%s\"\n" % ( self.zinfo1,
+				self.netnr, self.netname ) )
+		ofd.write( "ZLayer %d\n" % self.zlayer )
+		for line in self.lines:
+			ofd.write( line + "\n" )
+		for c, a in self.objs:
+			ofd.write( "ZCorner %s %d\n" % ( c.to_str(), a ) )
+		if len(self.polyscorners) > 0:
+			ofd.write( "$POLYSCORNERS\n" )
+			for c, a, b in self.polyscorners:
+				ofd.write( "%s %d %d\n" % ( c.to_str(), a, b ) )
+			ofd.write( "$endPOLYSCORNERS\n" )
+		ofd.write( "$endCZONE_OUTLINE\n" )
+
+	def inside( self, area ):
+		for c, a in self.objs:
+			if not area.inside( c ):
+				return False
+		return True
+
+
+class CzoneOutlines( PcbListObject ):
+
+	def __init__( self, line, words ):
+		PcbListObject.__init__( self, CzoneOutline, "$CZONE_OUTLINE", line, words )
+
+
+class Polyscorners( PcbLineObject ):
+
+	def __init__( self, line, words ):
+		PcbLineObject.__init__( self, "$POLYSCORNERS", "$endPOLYSCORNERS", False )
+
+
+
+
+
+class Board( PcbObject ):
+
+	def __init__( self ):
+		PcbObject.__init__( self )
+		self.clear()
+
+	def clear( self ):
+		self.shebang_version = 1
+		self.shebang_date = "-"
+		self.createdby = "# Created by panelize.py %s (r%s)" % (
+				__version__, __revision__ )
+		self.typeindex = {}
+		self.sourcearea = Area( Coord( 0, 0 ), Coord( 0, 0 ) )
+		self.transforms = 0
+		self.next_net_nr = 0
+		self.net_by_nr = {}
+		self.net_by_name = {}
+		self.source_board = None
+
+	def read_file( self, filename ):
+		global length_str_to_int, length_int_to_str, length_unit
+		self.clear()
+		starttags = {
+			"$GENERAL": ( "general", General, ),
+			"$SHEETDESCR": ( "sheetdescr", Sheetdescr, ),
+			"$SETUP": ( "setup", Setup, ),
+			"$EQUIPOT": ( "equipot", Equipots, ),
+			"$NCLASS": ( "nclass", Nclasses, ),
+			"$MODULE": ( "module", Modules, ),
+			"$DRAWSEGMENT": ( "drawsegment", Drawsegments, ),
+			"$TEXTPCB": ( "textpcb", Textpcbs, ),
+			"$COTATION": ( "cotation", Cotations, ),
+			"$TRACK": ( "track", Tracks, ),
+			"$ZONE": ( "zone", Zone, ),
+			"$CZONE_OUTLINE": ( "czone_outline", CzoneOutlines, ),
+		}
+		ifd = open( filename, "r" )
+		obj = None
+		hmms = 10
+		try:
+			line = ifd.next().rstrip()
+			while True:
+				line_used = True
+				words = line.split()
+				if line == "" or line[0] == "#":
+					pass
+				elif obj:
+					line_used, end = obj.add_line( line, words )
+					if end:
+						obj = None
+				elif words[0] in starttags:
+					typename, constr = starttags[words[0]]
+					if typename in self.typeindex:
+						obj = self.objs[self.typeindex[typename]]
+						line_used = False
+					else:
+						obj = constr( line, words )
+						self.typeindex[typename] = self.add( obj )
+				elif words[0] == "PCBNEW-BOARD":
+					shebang = line.split( None, 4 )
+					if len(shebang) != 5:
+						raise Exception, "unknown format (shebang <5 parts)"
+					if shebang[0] != "PCBNEW-BOARD":
+						raise Exception, "unknown format (wrong ID)"
+					if shebang[1] != "Version":
+						raise Exception, "unknown format (missing Version)"
+					if shebang[3] != "date":
+						raise Exception, "unknown format (missing date)"
+					self.shebang_version = int(shebang[2])
+					self.shebang_date = shebang[4]
+					if not self.shebang_version in ( 1, 2 ):
+						raise Exception, \
+							"unknown format version %d" % self.shebang_version
+					print "detected file version %d" % self.shebang_version
+					if self.shebang_version == 2:
+						length_str_to_int = length_str_to_int_2
+						length_int_to_str = length_int_to_str_2
+						length_unit = 0
+				elif words[0] == "$EndBOARD":
+					try:
+						line = ifd.next().rstrip()
+						raise PcbException, "missing EOF."
+					except StopIteration:
+						break
+				else:
+					print "hmm?", line
+					hmms -= 1
+					if hmms <= 0:
+						break
+				if line_used:
+					line = ifd.next().rstrip()
+		except StopIteration:
+			print "unexpected EOF"
+			raise PcbException, "unexpected EOF."
+		ifd.close()
+		print "loaded '%s'." % filename
+		for net in self.objs[self.typeindex["equipot"]].objs:
+			self.net_by_nr[net.nr] = net
+			self.net_by_name[net.name] = net.nr
+			if net.nr >= self.next_net_nr:
+				self.next_net_nr = net.nr + 1
+		for netclass in self.objs[self.typeindex["nclass"]].objs:
+			for netname in netclass.nets:
+				self.net_by_nr[self.net_by_name[netname]].netclass = netclass
+
+
+	def write_file( self, filename ):
+		ofd = open( filename, "w" )
+		self.write( ofd )
+		ofd.close()
+
+	def write( self, ofd ):
+		ofd.write( "PCBNEW-BOARD Version %d date %s\n\n%s\n\n" %
+			( self.shebang_version, self.shebang_date, self.createdby ) )
+		self.write_objs( ofd )
+		ofd.write( "$EndBOARD\n" )
+
+	def clone_net( self, nr, name, newname ):
+		if self.source_board == None:
+			return self.clone_net_local( nr, name, newname )
+		else:
+			return self.clone_net_merge( nr, name, newname )
+
+	def clone_net_local( self, nr, name, newname ):
+		if name == newname:
+			return nr
+		if not nr in self.net_by_nr:
+			raise PcbException, "invalid net nr"
+		oldnet = self.net_by_nr[nr]
+		if oldnet.name != name:
+			raise PcbException, "net nr/name mismatch"
+		if nr == 0 and name != newname:
+			raise PcbException, "net nr 0 can't be cloned"
+		if not newname in self.net_by_name:
+			newnr = self.next_net_nr
+			self.next_net_nr += 1
+			newnet = Equipot( None, None )
+			newnet.nr = newnr
+			newnet.name = newname
+			newnet.st1 = oldnet.st1
+			newnet.netclass = oldnet.netclass
+			newnet.netclass.nets.append( newname )
+			self.net_by_nr[newnr] = newnet
+			self.net_by_name[newname] = newnr
+		return self.net_by_name[newname]
+
+	def clone_net_merge( self, nr, name, newname ):
+		board2 = self.source_board
+		if not nr in board2.net_by_nr:
+			raise PcbException, "invalid net nr"
+		oldnet = board2.net_by_nr[nr]
+		if oldnet.name != name:
+			print nr, name, newname, oldnet.nr, oldnet.name
+			raise PcbException, "net nr/name mismatch"
+		if nr == 0 and name != newname:
+			raise PcbException, "net nr 0 can't be cloned"
+		if not newname in self.net_by_name:
+			newnr = self.next_net_nr
+			self.next_net_nr += 1
+			newnet = Equipot( None, None )
+			newnet.nr = newnr
+			newnet.name = newname
+			newnet.st1 = oldnet.st1
+			#newnet.netclass = oldnet.netclass
+			# +++ quick hack
+			newnet.netclass = self.objs[self.typeindex["nclass"]].objs[0]
+			newnet.netclass.nets.append( newname )
+			self.net_by_nr[newnr] = newnet
+			self.net_by_name[newname] = newnr
+		return self.net_by_name[newname]
+
+	def source_area( self, area ):
+		self.sourcearea = area
+
+	def copy( self, destination ):
+		self.rotate( destination, "top-left", 0 )
+
+	def rotate( self, destination, cornername, angle ):
+		self.flip( destination, cornername, angle, False )
+
+	def flip( self, destination, cornername, angle, flip ):
+		self.transforms += 1
+		suffix = "_C%d" % self.transforms
+		trans = FlipRotateTransform( self.sourcearea, cornername,
+				destination, angle, flip, suffix, self )
+		copytypes = ( "module", "textpcb", "track", "czone_outline",
+				"drawsegment" )
+		counts = None
+		for typename in copytypes:
+			if typename in self.typeindex:
+				count = 0
+				container = self.objs[self.typeindex[typename]]
+				add = []
+				for obj in container.objs:
+					if obj.inside( self.sourcearea ):
+						add.append( obj.clone( trans ) )
+						count += 1
+				container.objs += add
+				if count > 0:
+					if counts == None:
+						counts = "  "
+					else:
+						counts += ", "
+					counts += "%d %s" % ( count, typename )
+		if counts:
+			print counts[:-1]
+		else:
+			print "  nothing found :("
+
+	def merge( self, board2, offset ):
+		self.source_board = board2
+		self.transforms += 1
+		suffix = "_C%d" % self.transforms
+		a = Area( Coord( 0, 0 ), Coord( 1000000, 1000000 ) )
+		trans = FlipRotateTransform( a, "top-left",
+				offset, 0, False, suffix, self )
+		copytypes = ( "module", "textpcb", "track", "czone_outline",
+				"drawsegment" )
+		counts = None
+		for typename in copytypes:
+			if typename in board2.typeindex:
+				count = 0
+				# might need to create a coontainer here +++
+				container = board2.objs[board2.typeindex[typename]]
+				add = []
+				for obj in container.objs:
+					add.append( obj.clone( trans ) )
+					count += 1
+				self.objs[self.typeindex[typename]].objs += add
+				if count > 0:
+					if counts == None:
+						counts = "  "
+					else:
+						counts += ", "
+					counts += "%d %s" % ( count, typename )
+		if counts:
+			print counts[:-1]
+		else:
+			print "  nothing found :("
+		self.source_board = None
+
+
+def cmd_merge( board, filename, source, destination ):
+	board2 = Board()
+	board2.read_file( filename )
+	offset = destination - source
+	board.merge( board2, offset )
+
+def cmd_source_area( board, topleft, bottomright ):
+	board.source_area( Area( topleft, bottomright ) )
+
+def cmd_copy( board, destination ):
+	board.flip( destination, "top-left", 0, False )
+
+def cmd_rotate( board, coord, cornername, angle ):
+	board.flip( coord, cornername, angle, False )
+
+def cmd_flipy( board, coord ):
+	board.flip( coord, "top-right", 0, True )
+
+def cmd_flipx( board, coord ):
+	board.flip( coord, "bottom-left", 180, True )
+
+def cmd_fliprot( board, coord, cornername, angle ):
+	board.flip( coord, cornername, angle, True )
+
+def usage( nil ):
+	global __version__, __revision__, commands
+	print "panelize.py V%s (r%s) for kicad brd files version 1 and 2." % (
+			__version__, __revision__ )
+	print
+	print "usage: infile outfile commands..."
+	print
+	print "IMPORTANT: source-area has to be specified first!"
+	print
+	print "commands:"
+	cmdnames = commands.keys()[:]
+	cmdnames.sort()
+	for cmdname in cmdnames:
+		func, cmddescr, args = commands[cmdname]
+		line = "  %s" % cmdname
+		for type, name, descr in args:
+			line += " <%s>" % name
+		print
+		print line
+		print
+		print "      %s" % cmddescr
+		if len(args) > 0:
+			print
+			for type, name, descr in args:
+				if type != None:
+					descs = descr.split( "\n" )
+					print "      %-15s %s" % ( name, descs[0] )
+					for d in descs[1:]:
+						print "      %-15s %s" % ( "", d )
+	print
+	print "coordinates:"
+	print
+	for u in G_units.values():
+		name = u[-2]
+		example = u[-1]
+		print "  %-15s  %s" % ( name, example )
+	print
+	sys.exit( 0 )
+
+commands = {
+	"source-area": ( cmd_source_area,
+		"Set the source area to copy.",
+		(
+			( "coord", "top-left", "Coordinate of corner (X/Y)." ),
+			( "coord", "bottom-right", "Coordinate of corner (X/Y)." ),
+	) ),
+	"copy": ( cmd_copy,
+		"Copy source to destination.",
+		(
+			( "coord", "destination", "Coordinate of top-left corner (X/Y)." ),
+	) ),
+	"rotate": ( cmd_rotate,
+		"Copy source to destination and rotate it.",
+		(
+			( "coord", "destination",
+				"Coordinate of destination top-left corner (X/Y)." ),
+			( "corner", "source-corner",
+				"Corner of source area which maps to destination corner." +
+				"\n(top-left|top-right|bottom-left|bottom-right)" ),
+			( "angle", "angle", "Rotation angle (0|90|180|270)." ),
+	) ),
+	"flipy": ( cmd_flipy,
+		"Copy source to destination and flip side (mirror at Y axis).",
+		(
+			( "coord", "destination",
+				"Coordinate of destination top-left corner (X/Y)." ),
+	) ),
+	"flipx": ( cmd_flipx,
+		"Copy source to destination and flip side (mirror at X axis).",
+		(
+			( "coord", "destination",
+				"Coordinate of destination top-left corner (X/Y)." ),
+	) ),
+	"fliprot": ( cmd_fliprot,
+		"Copy source to destination, flip side and rotate it.",
+		(
+			( "coord", "destination",
+				"Coordinate of destination top-left corner (X/Y)." ),
+			( "corner", "source-corner",
+				"Corner of source area which maps to destination corner." +
+				"\n(top-left|top-right|bottom-left|bottom-right)" ),
+			( "angle", "angle",
+				"Rotation angle (0|90|180|270)." ),
+	) ),
+	"merge": ( cmd_merge,
+		"Merge a file into the current PCB.",
+		(
+			( "string", "filename",
+				"Name of the file to merge." ),
+			( "coord", "source",
+				"Coordinate of source top-left corner (X/Y)." ),
+			( "coord", "destination",
+				"Coordinate of destination top-left corner (X/Y)." ),
+	) ),
+	"help": ( usage,
+		"Print this help text.",
+		[]
+	),
+}
+
+G_units = {
+	"":   (
+		( 254, 100000 ),
+		( 1, 1000000 ),
+		"1/10000 inch", "29566/33346"
+	),
+	"i":  (
+		( 254, 10 ),
+		( 1, 100 ),
+		"inch", "2.9566/3.3346i"
+	),
+	"mm": (
+		( 1, 1 ),
+		( 1, 2540 ),
+		"millimeter", "75.1/84.7mm"
+	),
+	"um": (
+		( 1, 1000 ),
+		( 1, 2540000 ),
+		"micrometer", "75100/84700um"
+	),
+	"nm": (
+		( 1, 1000000 ),
+		( 1, 2540000000 ),
+		"nanometer", "75100000/84700000nm"
+	),
+}
+
+def parse_coord( s ):
+	cc = s.split( "/" )
+	if len(cc) != 2:
+		raise Exception, "invalid coordinate '%s'" % s
+	units = [ "", "" ]
+	for i in range( 0, 2 ):
+		while len(cc[i]) > 0 and cc[i][-1].isalpha():
+			units[i] = cc[i][-1] + units[i]
+			cc[i] = cc[i][:-1]
+	if units[0] != "" and units[0] != units[1]:
+		raise Exception, \
+			"coordinate units must be the same for x and y in coord '%s'" % s
+	unit = units[1]
+	if len(cc[0]) == 0 or len(cc[1]) == 0:
+		raise Exception, "invalid coordinate '%s'" % s
+	if not unit in G_units:
+		raise Exception, "invalid unit '%s' in coord '%s'" % ( unit, s )
+	m, d = G_units[unit][length_unit]
+	x = length_str_to_int_2( cc[0] ) * m / d
+	y = length_str_to_int_2( cc[1] ) * m / d
+	# print "Coord", s, "->", x, y
+	return Coord( x, y )
+
+def panelize( infile, outfile, args ):
+	global __version__, __revision__, commands
+	print "panelize.py %s r%s" % ( __version__, __revision__ )
+	board = Board()
+	board.read_file( infile )
+	while len(args) > 0:
+		cmd = args[0]
+		args = args[1:]
+		if cmd in commands:
+			function, descr, argtypes = commands[cmd]
+			if len(args) < len(argtypes):
+				print "missing arguments for command '%s'." % cmd
+				return 1
+			cmdargs = []
+			for i in range( 0, len(argtypes) ):
+				type = argtypes[i][0]
+				if type == "coord":
+					try:
+						cmdargs.append( parse_coord( args[i] ) )
+					except Exception, ex:
+						#traceback.print_exc()
+						print ex
+						return 1
+				elif type == "corner":
+					if not args[i] in ( "top-left", "top-right", "bottom-left", "bottom-right" ):
+						print "invalid corner name '%s'" % args[i]
+						return 1
+					cmdargs.append( args[i] )
+				elif type == "angle":
+					if not (args[i].isdigit() or 
+							(args[i][0] == "-" and args[i][1:].isdigit()) ):
+						print "invalid angle name '%s'" % args[i]
+						return 1
+					a = (int(args[i]) % 360 + 360) % 360
+					if not a in ( 0, 90, 180, 270 ):
+						print "angle must be a multiple of 90"
+						return 1
+					cmdargs.append( a )
+				elif type == "string":
+					cmdargs.append( args[i] )
+				else:
+					print "unhandled type '%s'" % type
+					return 1
+			print "%s." % cmd
+			function( board, *cmdargs )
+			args = args[len(argtypes):]
+		else:
+			print "unknown command '%s'." % cmd
+			return 1
+	board.write_file( outfile )
+	print "saved '%s'." % outfile
+	return 0
+
+if __name__ == "__main__":
+	if len(sys.argv) < 3:
+		usage( None )
+	else:
+		infile = sys.argv[1]
+		outfile = sys.argv[2]
+		args = sys.argv[3:]
+		sys.exit( panelize( infile, outfile, args ) )
+
